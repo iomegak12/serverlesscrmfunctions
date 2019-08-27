@@ -12,13 +12,24 @@ using CRMSystemFunctions.Entities.Implementations;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using CRMSystemFunctions.Models;
+using CRMSystemFunctions.Entities.Interfaces;
 
 namespace CRMSystemFunctions
 {
-    public static class CustomerInfoProviderFunctions
+    public class CustomerInfoProviderFunctions
     {
+        private ICustomersContext customersContext = default(ICustomersContext);
+
+        public CustomerInfoProviderFunctions(ICustomersContext customersContext)
+        {
+            if (customersContext == default(ICustomersContext))
+                throw new ArgumentNullException(nameof(customersContext));
+
+            this.customersContext = customersContext;
+        }
+
         [FunctionName("CustomerInfoProviderFunctions")]
-        public static async Task<IActionResult> Run(
+        public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
@@ -34,23 +45,15 @@ namespace CRMSystemFunctions
                 var connectionString = Encoding.ASCII.GetString(
                     Convert.FromBase64String(encodedConnectionString));
 
-                var contextOptionsBuilder = new DbContextOptionsBuilder<CustomersContext>();
+                var filteredCustomer = this.customersContext
+                    .Customers
+                    .Where(customer => customer.CustomerId.Equals(customerId))
+                    .FirstOrDefault();
 
-                contextOptionsBuilder.UseSqlServer(connectionString);
-
-                using (var context = new CustomersContext(contextOptionsBuilder.Options))
-                {
-                    var filteredCustomer =
-                        context
-                        .Customers
-                        .Where(customer => customer.CustomerId.Equals(customerId))
-                        .FirstOrDefault();
-
-                    if (filteredCustomer == default(Customer))
-                        result = new NotFoundResult();
-                    else
-                        result = new OkObjectResult(filteredCustomer);
-                }
+                if (filteredCustomer == default(Customer))
+                    result = new NotFoundResult();
+                else
+                    result = new OkObjectResult(filteredCustomer);
             }
             catch (Exception exceptionObject)
             {
